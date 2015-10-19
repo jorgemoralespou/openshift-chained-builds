@@ -1,0 +1,3 @@
+FROM centos:7
+
+ENV MY_VERSION 1
