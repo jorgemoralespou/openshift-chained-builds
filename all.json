@@ -46,7 +46,8 @@
                "dockerStrategy": {
                   "from": {
                      "kind": "ImageStreamTag",
-                     "name": "centos:centos7"
+                     "name": "centos:centos7",
+                     "namespace": "openshift"
                   }
                }
             },
@@ -81,7 +82,7 @@
          "kind": "BuildConfig",
          "apiVersion": "v1",
          "metadata": {
-            "name": "basebuilder"
+            "name": "corporatebuilder"
          },
          "spec": {
             "triggers": [
@@ -434,7 +435,7 @@
                   },
                   "strategy": {
                      "type": "Docker",
-                     "sourceStrategy": {
+                     "dockerStrategy": {
                         "from": {
                            "kind": "ImageStreamTag",
                            "name": "corporatebuilder:latest"
@@ -578,6 +579,6 @@
                }
             }
          ]
-      }      
+      }
    ]
 }
