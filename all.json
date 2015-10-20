@@ -1,0 +1,306 @@
+{
+   "kind": "List",
+   "apiVersion": "v1",
+   "metadata": {
+      "name": "chained-builds"
+   },
+   "items": [
+      {
+         "kind": "BuildConfig",
+         "apiVersion": "v1",
+         "metadata": {
+            "name": "basebuilder"
+         },
+         "spec": {
+            "triggers": [
+               {
+                  "type": "ConfigChange"
+               },
+               {
+                  "type": "GitHub",
+                  "github": {
+                     "secret": "secret"
+                  }
+               },
+               {
+                  "type": "Generic",
+                  "generic": {
+                     "secret": "secret"
+                  }
+               },
+               {
+                  "type": "ImageChange",
+                  "imageChange": {}
+               }
+            ],
+            "source": {
+               "type": "Git",
+               "git": {
+                  "uri": "https://github.com/jorgemoralespou/openshift-chained-builds.git",
+                  "ref": "master"
+               },
+               "contextDir": "base_builder"
+            },
+            "strategy": {
+               "type": "Docker",
+               "dockerStrategy": {
+                  "from": {
+                     "kind": "ImageStreamTag",
+                     "name": "centos:centos7"
+                  }
+               }
+            },
+            "output": {
+               "to": {
+                  "kind": "ImageStreamTag",
+                  "name": "basebuilder:latest"
+               }
+            },
+            "resources": {}
+         }
+      },
+      {
+         "kind": "ImageStream",
+         "apiVersion": "v1",
+         "metadata": {
+            "name": "centos"
+         },
+         "spec": {
+            "dockerImageRepository": "library/centos:centos7"
+         }
+      },
+      {
+         "kind": "ImageStream",
+         "apiVersion": "v1",
+         "metadata": {
+            "name": "basebuilder"
+         },
+         "spec": {
+            "dockerImageRepository": "",
+            "tags": [
+               {
+                  "name": "latest",
+                  "annotations": {
+                     "version": "1.0"
+                  }
+               }
+            ]
+         }
+      },
+      {
+         "kind": "Template",
+         "apiVersion": "v1",
+         "metadata": {
+            "name": "sample-chained-builds",
+            "annotations": {
+               "description": "Sample App to demonstrate chained builds from basebuilder",
+               "iconClass": "icon-jboss",
+               "tags": "instant-app,springboot,maven,java"
+            }
+         },
+         "labels": {
+            "application": "sample-chained-builds",
+            "createdBy": "sample-chained-builds"
+         },
+         "parameters": [
+            {
+               "description": "The name for the application.",
+               "name": "APPLICATION_NAME",
+               "value": "sample",
+               "displayName": "Application name",
+               "required": true
+            },
+            {
+               "description": "Custom hostname for service routes.  Leave blank for default hostname, e.g.: <application-name>.<project>.<default-domain-suffix>",
+               "name": "APPLICATION_DOMAIN",
+               "displayName": "Application domain",
+               "value": "example.com",
+               "required": true
+            }
+         ],
+         "objects": [
+            {
+               "kind": "BuildConfig",
+               "apiVersion": "v1",
+               "metadata": {
+                  "name": "${APPLICATION_NAME}"
+               },
+               "spec": {
+                  "triggers": [
+                     {
+                        "type": "ConfigChange"
+                     },
+                     {
+                        "type": "GitHub",
+                        "github": {
+                           "secret": "secret"
+                        }
+                     },
+                     {
+                        "type": "Generic",
+                        "generic": {
+                           "secret": "secret"
+                        }
+                     },
+                     {
+                        "type": "ImageChange",
+                        "imageChange": {}
+                     }
+                  ],
+                  "source": {
+                     "type": "Git",
+                     "git": {
+                        "uri": "https://github.com/jorgemoralespou/openshift-chained-builds.git",
+                        "ref": "master"
+                     },
+                     "contextDir": "sample_s2i_app"
+                  },
+                  "strategy": {
+                     "type": "Source",
+                     "sourceStrategy": {
+                        "from": {
+                           "kind": "ImageStreamTag",
+                           "name": "basebuilder:latest"
+                        }
+                     }
+                  },
+                  "output": {
+                     "to": {
+                        "kind": "ImageStreamTag",
+                        "name": "${APPLICATION_NAME}:latest"
+                     }
+                  },
+                  "resources": {}
+               }
+            },
+            {
+               "kind": "ImageStream",
+               "apiVersion": "v1",
+               "metadata": {
+                  "name": "${APPLICATION_NAME}"
+               },
+               "spec": {
+                  "dockerImageRepository": "",
+                  "tags": [
+                     {
+                        "name": "latest"
+                     }
+                  ]
+               }
+            },
+            {
+               "kind": "DeploymentConfig",
+               "apiVersion": "v1",
+               "metadata": {
+                  "name": "${APPLICATION_NAME}"
+               },
+               "spec": {
+                  "strategy": {
+                     "type": "Rolling",
+                     "rollingParams": {
+                        "updatePeriodSeconds": 1,
+                        "intervalSeconds": 1,
+                        "timeoutSeconds": 600
+                     },
+                     "resources": {}
+                  },
+                  "triggers": [
+                     {
+                        "type": "ConfigChange"
+                     },
+                     {
+                        "type": "ImageChange",
+                        "imageChangeParams": {
+                           "automatic": true,
+                           "containerNames": [
+                              "${APPLICATION_NAME}"
+                           ],
+                           "from": {
+                              "kind": "ImageStreamTag",
+                              "name": "${APPLICATION_NAME}:latest"
+                           }
+                        }
+                     }
+                  ],
+                  "replicas": 3,
+                  "selector": {
+                     "deploymentconfig": "${APPLICATION_NAME}"
+                  },
+                  "template": {
+                     "metadata": {
+                        "labels": {
+                           "deploymentconfig": "${APPLICATION_NAME}"
+                        }
+                     },
+                     "spec": {
+                        "containers": [
+                           {
+                              "name": "${APPLICATION_NAME}",
+                              "image": "${APPLICATION_NAME}",
+                              "ports": [
+                                 {
+                                    "containerPort": 8080,
+                                    "protocol": "TCP"
+                                 }
+                              ],
+                              "livenessProbe": {
+                                 "tcpSocket": {
+                                    "port": 8080
+                                 },
+                                 "initialDelaySeconds": 30,
+                                 "timeoutSeconds": 1
+                              },
+                              "resources": {},
+                              "terminationMessagePath": "/dev/termination-log",
+                              "imagePullPolicy": "IfNotPresent",
+                              "securityContext": {
+                                 "capabilities": {},
+                                 "privileged": false
+                              }
+                           }
+                        ],
+                        "restartPolicy": "Always",
+                        "dnsPolicy": "ClusterFirst"
+                     }
+                  }
+               }
+            },
+            {
+               "kind": "Route",
+               "apiVersion": "v1",
+               "metadata": {
+                  "name": "${APPLICATION_NAME}"
+               },
+               "spec": {
+                  "host": "${APPLICATION_NAME}.${APPLICATION_DOMAIN}",
+                  "to": {
+                     "kind": "Service",
+                     "name": "${APPLICATION_NAME}"
+                  }
+               }
+            },
+            {
+               "kind": "Service",
+               "apiVersion": "v1",
+               "metadata": {
+                  "name": "${APPLICATION_NAME}"
+               },
+               "spec": {
+                  "ports": [
+                     {
+                        "name": "${APPLICATION_NAME}-http",
+                        "port": 8080,
+                        "targetPort": 8080
+                     }
+                  ],
+                  "selector": {
+                     "deploymentconfig": "${APPLICATION_NAME}"
+                  },
+                  "type": "ClusterIP",
+                  "sessionAffinity": "None"
+               }
+            }
+         ]
+      }
+   ]
+}
